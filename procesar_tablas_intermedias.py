@@ -34,7 +34,7 @@ def object_to_series(obj):
     """
     return pd.Series(obj, dtype='object')
 
-# Dictionary to store removed IDs
+# Diccionario para el reporte de los IDs que se han borrado en el proceso de ETL por ser nulos
 nan_info = {}
 
 def remove_nan(data_frame, df_name):
@@ -166,12 +166,12 @@ def procesar_iden_codigo(archivo_codigo):
 def procesar_tabla_antropometrias_curvas(antropometrias, identidad, e_gest_nacer, examen_rn):
     """
     Crea una tabla con las antropometrias de los pacientes para talla, peso y pc con las columnas
-      - AN_Talla: Talla del paciente en cm
+      - AC_Talla: Talla del paciente en cm
       - AC_Peso: Peso del paciente en gramos
-      - AN_PC: Perimetro Cefalico del paciente en cm
+      - AC_PC: Perimetro Cefalico del paciente en cm
       - AC_Num: Consecutivo de las antropometrias tomadas desde el nacimiento
                 La antropometria al nacer es la numero 0
-      - Edad_Corregida_AT_Dias: Edad del paciente en dias corregida cuando se le tomo la 
+      - AC_EG_Dias: Edad del paciente en dias corregida cuando se le tomo la 
         antropometria se calcula sumando los dias entre la fecha de nacimiento y la fecha
         de la antropometria mas la edad gestacional al nacer
     """
@@ -247,8 +247,8 @@ def procesar_destete_alimentacion(archivo_destete_alimentacion, tabla_pacientes)
                                                        'edaddestete', 'oxigenoalaentrada',
                                                        'pesodesteteoxigeno', 'algoLM3meses',
                                                        'algoLM6meses','algoLM40sem','LME40',
-                                                       'LME3m','LME6m']]
-    return tabla_pacientes_alim_ox
+                                                       'LME3m','LME6m','id']]
+    return tabla_pacientes_alim_ox.set_index('id')
 
 def procesar_tablas_intermedias(archivo_pacientes, archivo_codigo, archivo_destete_alim):
     """
