@@ -174,6 +174,7 @@ def procesar_tabla_antropometrias_curvas(antropometrias, identidad, e_gest_nacer
       - AC_EG_Dias: Edad del paciente en dias corregida cuando se le tomo la 
         antropometria se calcula sumando los dias entre la fecha de nacimiento y la fecha
         de la antropometria mas la edad gestacional al nacer
+     - Paciente_ID: Id del paciente al que se le tomo la antropometria
     """
     datos_antropometria = (antropometrias
                           .join(identidad[['Iden_FechaParto']], how='left')
@@ -204,6 +205,7 @@ def procesar_tabla_antropometrias_curvas(antropometrias, identidad, e_gest_nacer
                                           inplace = True)
     datos_antropometria_nacimiento['AC_Num'] = 0
     datos_curvas = pd.concat([datos_antropometria, datos_antropometria_nacimiento])
+    datos_curvas = datos_curvas.reset_index().rename(columns={'id': 'Paciente_ID'})
     return datos_curvas
 
 def procesar_tabla_pacientes(identidad, iden_codigo, hosp_diagnostico):
@@ -212,10 +214,14 @@ def procesar_tabla_pacientes(identidad, iden_codigo, hosp_diagnostico):
       - Iden_Sexo: 1 niño, 2 niña, 3 no definido
       - HD_TotalDiasHospital: Numero de dias que el bebe estuvo hospitalizado antes
       de ingresar al ambulatorio
+      - Paciente_ID: id unico del paciente de Karen
+      - Iden_Codigo: Codigo identidad repetido por sede, 
+      - Iden_Sede: Codigo identidad de sede
     """
     datos_pacientes = identidad.loc[:,['Iden_Sexo']]
     datos_pacientes = datos_pacientes.join(hosp_diagnostico[['HD_TotalDiasHospital']], how='left')
     datos_pacientes = datos_pacientes.join(iden_codigo, how='left')
+    datos_pacientes = datos_pacientes.reset_index().rename(columns={'id': 'Paciente_ID'})
     return datos_pacientes
 
 def procesar_destete_alimentacion(archivo_destete_alimentacion, tabla_pacientes):
@@ -226,6 +232,7 @@ def procesar_destete_alimentacion(archivo_destete_alimentacion, tabla_pacientes)
       - HD_TotalDiasHospital: Numero de dias que el bebe estuvo hospitalizado antes
       - Iden_Codigo: Codigo de paciente, se puede repetir por sede
       - Iden_Sede: Sede en la que se registro el paciente
+      - Paciente_ID: id del paciente 
       - Variables calculadas en script externo: 'edaddestete', 'oxigenoalaentrada', 
         'pesodesteteoxigeno','algoLM3meses','algoLM6meses','algoLM40sem','LME40',
         'LME3m','LME6m'
@@ -238,7 +245,7 @@ def procesar_destete_alimentacion(archivo_destete_alimentacion, tabla_pacientes)
     tabla_pacientes['Iden_Codigo'] = tabla_pacientes['Iden_Codigo'].astype(int)
     tabla_pacientes['Iden_Sede'] = tabla_pacientes['Iden_Sede'].astype(int)
 
-    tabla_pacientes_alim_ox = tabla_pacientes.reset_index().merge(destete_alimentacion,
+    tabla_pacientes_alim_ox = tabla_pacientes.merge(destete_alimentacion,
                                                   left_on=['Iden_Codigo', 'Iden_Sede'],
                                                   right_on=['Iden_Codigo', 'Iden_Sede'],
                                                   how='left')
@@ -247,31 +254,41 @@ def procesar_destete_alimentacion(archivo_destete_alimentacion, tabla_pacientes)
                                                        'edaddestete', 'oxigenoalaentrada',
                                                        'pesodesteteoxigeno', 'algoLM3meses',
                                                        'algoLM6meses','algoLM40sem','LME40',
-                                                       'LME3m','LME6m','id']]
-    return tabla_pacientes_alim_ox.set_index('id')
+                                                       'LME3m','LME6m','Paciente_ID']]
+    return tabla_pacientes_alim_ox
 
 def procesar_tablas_intermedias(archivo_pacientes, archivo_codigo, archivo_destete_alim):
     """
     Crea las tablas intermedias para el analisis de los datos
     """
     pacientes = procesar_pacientes(archivo_pacientes)
+    print('scrip proceso json pacientes')
     examen_rn = procesar_examen_recien_nacido(pacientes)
+    print('scrip proceso json  examen_rn')
     hosp_diagnostico = procesar_hosp_diagnostico(pacientes)
+    print('scrip proceso json  hosp_diagnostico')
     antropometrias = procesar_antropometrias(pacientes)
+    print('scrip proceso json  antropometrias')
     identidad = procesar_identidad(pacientes)
+    print('scrip proceso json  identidad')
     iden_codigo = procesar_iden_codigo(archivo_codigo)
+    print('scrip proceso json  iden_codigo')
     e_gest_nacer = procesar_e_gest_al_nacer(pacientes)
+    print('scrip proceso json  e_gest_nacer')
     tabla_ant_curvas = procesar_tabla_antropometrias_curvas(antropometrias,
                                                                     identidad,
                                                                     e_gest_nacer,
                                                                     examen_rn)
     tabla_ant_curvas.to_pickle("antropometrias_nacimiento_evoluciones.pkl")
+    print('script guardo tabla_ant_curvas')
     tabla_pacientes = procesar_tabla_pacientes(identidad,
                                                 iden_codigo,
                                                 hosp_diagnostico)
     tabla_pacientes.to_pickle("pacientes.pkl")
+    print('script guardo tabla_pacientes')
     tabla_pacientes_alim_ox = procesar_destete_alimentacion(archivo_destete_alim, tabla_pacientes)
     tabla_pacientes_alim_ox.to_pickle("pacientes_alim_ox.pkl")
+    print('script guardo tabla_pacientes_alim_ox')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
