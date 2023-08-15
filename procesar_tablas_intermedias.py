@@ -36,32 +36,57 @@ def object_to_series(obj):
 
 # Diccionario para el reporte de los IDs que se han borrado en el proceso de ETL por ser nulos
 nan_info = {}
+dup_info = {}
 
-def remove_nan(data_frame, df_name):
+def remover_nan(data_frame, nombre_df):
     """
     Verifica que cada df no tenga columnas vacias y si las tiene elimina los datos 
     Registra los ids eliminados en un objeto global
     """
     global nan_info
-    if df_name not in nan_info:
-        nan_info[df_name] = {}
+    if nombre_df not in nan_info:
+        nan_info[nombre_df] = {}
     for col in data_frame.columns:
         nan_indices = data_frame[data_frame[col].isna()].index
         if not nan_indices.empty:
-            nan_info[df_name][col] = nan_indices.tolist()
+            nan_info[nombre_df][col] = nan_indices.tolist()
             data_frame = data_frame.dropna(subset=[col])
     return data_frame
+
+def remover_duplicados(data_frame, nombre_df):
+    """
+    Remueve los datos que tengan la misma informacion de identificacion 
+    Iden_Sede e Iden_Codigo
+    """
+    global dup_info
+    if nombre_df not in dup_info:
+        dup_info[nombre_df] = {}
+    indice_duplicados = data_frame.duplicated(subset=['Iden_Sede','Iden_Codigo'], keep=False)
+    if not indice_duplicados.empty:
+        dup_info[nombre_df] = data_frame[indice_duplicados]['Paciente_ID'].tolist()
+    return data_frame[~indice_duplicados]
+
 
 def create_report():
     """
     Crea un reporte de las variables que se eliminaron
-    """
+   """
     global nan_info
+    global dup_info
     with open("reporte.txt", "w", encoding='utf-8') as file:
+        file.write("Filas eliminadas por valores nulos:\n")
         for table_name, columns in nan_info.items():
-            for column_name, indices in columns.items():
-                file.write(f"Para la tabla '{table_name}', en la columna '{column_name}', "
-                  f"se eliminaron las siguientes filas debido a valores NaN: {len(indices)}\n")
+            for column_name, records in columns.items():
+                file.write(f"Para la tabla '{table_name}', en la columna '{column_name}',")
+                file.write(" se eliminaron las siguientes filas debido a valores NaN:\n")
+                for record in records:
+                    file.write(f"id: {record}\n")
+        file.write("Filas eliminadas por valores duplicados:\n")
+        for table_name, records in dup_info.items():
+            file.write(f"Para la tabla '{table_name}' se eliminaron las siguientes filas")
+            file.write(" debido a valores de 'Iden_Sede','Iden_Codigo' duplicados \n")
+            for record in records:
+                file.write(f"id: {record}\n")
 
 
 def procesar_pacientes(archivo_pacientes):
@@ -92,7 +117,7 @@ def procesar_examen_recien_nacido(pacientes):
     """
     examen_rn = pacientes['ExamenRecienNacido'].apply(object_to_series)
     examen_rn = examen_rn[['ERN_Talla','ERN_PC']]
-    examen_rn = remove_nan(examen_rn, 'ExamenRecienNacido')
+    examen_rn = remover_nan(examen_rn, 'ExamenRecienNacido')
     return examen_rn
 
 def procesar_hosp_diagnostico(pacientes):
@@ -102,7 +127,7 @@ def procesar_hosp_diagnostico(pacientes):
     """
     hospitalizacion_diag = pacientes['HospitalizacionDiagnostico'].apply(object_to_series)
     hospitalizacion_diag = hospitalizacion_diag[['HD_TotalDiasHospital']]
-    hospitalizacion_diag = remove_nan(hospitalizacion_diag, 'HospitalizacionDiagnostico')
+    hospitalizacion_diag = remover_nan(hospitalizacion_diag, 'HospitalizacionDiagnostico')
     return hospitalizacion_diag
 
 
@@ -118,7 +143,7 @@ def procesar_antropometrias(pacientes):
     antropometrias = pacientes['Antropometria'].explode().apply(object_to_series)
     antropometrias['AN_timestamp'] = obtener_fecha(antropometrias, 'AN_timestamp')
     antropometrias = antropometrias[['V_id', 'AN_timestamp', 'AN_Talla', 'AN_Peso', 'AN_PC']]
-    antropometrias = remove_nan(antropometrias, 'Antropometria')
+    antropometrias = remover_nan(antropometrias, 'Antropometria')
     return antropometrias
 
 def procesar_e_gest_al_nacer(pacientes):
@@ -132,7 +157,7 @@ def procesar_e_gest_al_nacer(pacientes):
     e_gest_nacer = e_inicial_pediatria['EIP_EdadGestacionalAlNacer'].apply(object_to_series)
     e_gest_nacer = e_gest_nacer.drop([0], axis=1)
     e_gest_nacer = e_gest_nacer[['EIP_EG_DiasTotales', 'EIP_EG_Selecciono']]
-    e_gest_nacer = remove_nan(e_gest_nacer, 'EIP_EG')
+    e_gest_nacer = remover_nan(e_gest_nacer, 'EIP_EG')
     e_gest_nacer['EIP_EG_DiasTotales'] = e_gest_nacer['EIP_EG_DiasTotales'].astype('int')
     return e_gest_nacer
 
@@ -146,7 +171,7 @@ def procesar_identidad(pacientes):
     iden = pacientes['Identificacion'].apply(pd.Series)
     iden['Iden_FechaParto'] = obtener_fecha(iden, 'Iden_FechaParto')
     iden = iden[['Iden_FechaParto','Iden_PesoParto','Iden_Sexo', 'Iden_Sede']]
-    iden = remove_nan(iden, 'Identificacion')
+    iden = remover_nan(iden, 'Identificacion')
     return iden
 
 def procesar_iden_codigo(archivo_codigo):
@@ -160,7 +185,7 @@ def procesar_iden_codigo(archivo_codigo):
                                     .apply(object_to_series)
                           ], axis=1).rename(columns={"$oid": "id"}).set_index('id')
     pacientes_id = pacientes_id['Identificacion'].apply(object_to_series)
-    pacientes_id = remove_nan(pacientes_id, 'Identificacion')
+    pacientes_id = remover_nan(pacientes_id, 'Identificacion')
     return pacientes_id
 
 def procesar_tabla_antropometrias_curvas(antropometrias, identidad, e_gest_nacer, examen_rn):
@@ -222,6 +247,7 @@ def procesar_tabla_pacientes(identidad, iden_codigo, hosp_diagnostico):
     datos_pacientes = datos_pacientes.join(hosp_diagnostico[['HD_TotalDiasHospital']], how='left')
     datos_pacientes = datos_pacientes.join(iden_codigo, how='left')
     datos_pacientes = datos_pacientes.reset_index().rename(columns={'id': 'Paciente_ID'})
+    datos_pacientes = remover_duplicados(datos_pacientes, 'datos_pacientes')
     return datos_pacientes
 
 def procesar_destete_alimentacion(archivo_destete_alimentacion, tabla_pacientes):
@@ -255,6 +281,7 @@ def procesar_destete_alimentacion(archivo_destete_alimentacion, tabla_pacientes)
                                                        'pesodesteteoxigeno', 'algoLM3meses',
                                                        'algoLM6meses','algoLM40sem','LME40',
                                                        'LME3m','LME6m','Paciente_ID']]
+    tabla_pacientes_alim_ox = remover_duplicados(tabla_pacientes_alim_ox, 'tabla_pacientes_alim_ox')
     return tabla_pacientes_alim_ox
 
 def procesar_tablas_intermedias(archivo_pacientes, archivo_codigo, archivo_destete_alim):
@@ -289,6 +316,7 @@ def procesar_tablas_intermedias(archivo_pacientes, archivo_codigo, archivo_deste
     tabla_pacientes_alim_ox = procesar_destete_alimentacion(archivo_destete_alim, tabla_pacientes)
     tabla_pacientes_alim_ox.to_pickle("pacientes_alim_ox.pkl")
     print('script guardo tabla_pacientes_alim_ox')
+    create_report()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
