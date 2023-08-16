@@ -26,3 +26,6 @@ Nombre de archvio de Json obtenido del sistema Karen que contiene datos compleme
 **input** `<datos_destete_alimentacion>`
 
 Archivo que contiene las variables 'edaddestete', 'oxigenoalaentrada', 'pesodesteteoxigeno', 'algoLM3meses','algoLM6meses','algoLM40sem','LME40','LME3m','LME6m' generadas por un script externo. Cada paciente se identifica con Iden_Codigo e Iden_Sede
+
+## Script the visualización
+

@@ -164,7 +164,7 @@ def procesar_e_gest_al_nacer(pacientes):
 def procesar_identidad(pacientes):
     """
     Procesa el objeto 'Identidad' que contiene 
-      - Iden_Sexo: sexo del paciente 1 (niño) u 2 (niña)
+      - Iden_Sexo: sexo del paciente 1 (niño) u 2 (niña), 3 indefinido
       - Iden_FechaParto: fecha en la que nació el paciente
       - Iden_PesoParto: eso del paciente en gramos, medido al nacer,
     """
