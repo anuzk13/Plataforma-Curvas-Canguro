@@ -8,35 +8,6 @@ from functools import reduce
 import argparse
 import pandas as pd
 
-# Dictionary to store removed IDs
-nan_info = {}
-
-def remove_nan(data_frame, df_name):
-    """
-    Verifica que cada df no tenga columnas vacias y si las tiene elimina los datos 
-    Registra los ids eliminados en un objeto global
-    """
-    global nan_info
-    if df_name not in nan_info:
-        nan_info[df_name] = {}
-    for col in data_frame.columns:
-        nan_indices = data_frame[data_frame[col].isna()].index
-        if not nan_indices.empty:
-            nan_info[df_name][col] = nan_indices.tolist()
-            data_frame = data_frame.dropna(subset=[col])
-    return data_frame
-
-def create_report():
-    """
-    Crea un reporte de las variables que se eliminaron
-    """
-    global nan_info
-    with open("reporte.txt", "w", encoding='utf-8') as file:
-        for table_name, columns in nan_info.items():
-            for column_name, indices in columns.items():
-                file.write(f"Para la tabla '{table_name}', en la columna '{column_name}', "
-                  f"se eliminaron las siguientes filas debido a valores NaN: {len(indices)}\n")
-
 def leer_datos_curvas(dir_datos_crecimiento):
     """
     Lee los datos de creicimiento de fenton y who guardados en dir_datos_creimiento
@@ -71,9 +42,9 @@ def leer_datos_curvas(dir_datos_crecimiento):
         for sex in ["ninos", "ninas"]:
             for curve in ["fenton", "who"]:
                 name = f"{folder}_desviaciones_{curve}/z_scores_{var}_{sex}_{curve}.csv"
-                z_scores[curve][sex][var] = pd.read_pickle(name)
+                z_scores[curve][sex][var] = pd.read_csv(name, index_col=0)
                 name = f"{folder}_percentiles_fenton/percentiles_{var}_{sex}_fenton.csv"
-                percentiles["fenton"][sex][var] = pd.read_pickle(name)
+                percentiles["fenton"][sex][var] = pd.read_csv(name, index_col=0)
     return z_scores, percentiles
 
 def leer_tablas_intermedias(dir_tablas_intermedias):
@@ -99,14 +70,15 @@ def validar_antropometrias_pacientes(antropometrias, pacientes):
     - sexo de paciente no es 3
     - edad de antropometria (corregida) es mayor a 171 
     - no tiene valores nulos en la antropometria
+    - no tiene valores no validos en antropometrias (  AC_Peso < 500 gr, AC_PC < 15 cm,  AC_Talla < 25 cm)
+    - tiene antropometria 0 u 1 (y no tiene valores nulos en esas antropometrias)
     """
 
     sexo_valido = pacientes['Iden_Sexo'] != 3
 
-    filtros_pac = [sexo_valido] 
+    filtros_pac = [sexo_valido]
+    pacientes_filtados = pacientes[sexo_valido]
     nombres_filtros_pac = ["Sexo no es 3"]
-
-    pacientes_filtados = pacientes[reduce(lambda x, y: x & y, filtros_pac)]
 
     tiene_paciente = antropometrias['Paciente_ID'].isin(pacientes_filtados['Paciente_ID'])
     edad_minima_valida = antropometrias['AC_EG_Dias'] >= 171
@@ -114,26 +86,82 @@ def validar_antropometrias_pacientes(antropometrias, pacientes):
     peso_no_nulo = pd.notnull(antropometrias['AC_Peso'])
     pc_no_nulo = pd.notnull(antropometrias['AC_PC'])
     talla_no_nulo = pd.notnull(antropometrias['AC_Talla'])
+    peso_valido = antropometrias['AC_Peso'] > 500
+    pc_valido = antropometrias['AC_PC'] > 15
+    talla_valida = antropometrias['AC_Talla'] > 25
 
-    filtros_ant = [ tiene_paciente, edad_minima_valida, nacimiento_no_nulo,
-                    peso_no_nulo , pc_no_nulo , talla_no_nulo]
+    filtros_ant = [ edad_minima_valida, nacimiento_no_nulo,
+                    peso_no_nulo , pc_no_nulo , talla_no_nulo,
+                    peso_valido, pc_valido, talla_valida]
     nombres_filtros_ant = ['no tiene datos paciente', 'edad < 171' ,
-                            'nacimiento nulo', 'peso nulo' , 'pc nulo' , 'talla nula']
-    antropometrias_filtradas = antropometrias[reduce(lambda x, y: x & y, filtros_ant)]
+                            'nacimiento nulo', 'peso nulo' , 'pc nulo' , 'talla nula',
+                            'peso < 500 gr', 'pc < 15 cm', 'talla < 25 cm']
+    ant_filtradas = antropometrias[reduce(lambda x, y: x & y, filtros_ant) & tiene_paciente]
+
+    ant_validas = antropometrias[reduce(lambda x, y: x & y, filtros_ant)]
+    ant_nac_pacientes = ant_validas[ant_validas['AC_Num'] == 0]['Paciente_ID']
+    ant_nacimiento = pacientes['Paciente_ID'].isin(ant_nac_pacientes)
+    primera_ant_pacientes = ant_validas[ant_validas['AC_Num'] == 1]['Paciente_ID']
+    primera_ant = pacientes['Paciente_ID'].isin(primera_ant_pacientes)
+
+    filtros_pac += [ant_nacimiento, primera_ant]
+    pacientes_filtados = pacientes[ant_nacimiento & primera_ant]
+    nombres_filtros_pac += ["No tiene antopometria de nacimiento o esta no tiene valores validos",
+                            "No tiene anrtopometria de llegada o esta no tiene valores validos"]
 
     with open("reporte_antropometrias.txt", "w", encoding='utf-8') as file:
         for filtro, nombre in zip(filtros_pac, nombres_filtros_pac):
             eliminados = pacientes[~filtro]
-            file.write(f"Filas pacientes eliminadas por {nombre}: {eliminados.size}\n")
+            file.write(f"Filas pacientes eliminadas por {nombre}: {eliminados.shape[0]}\n")
             for paciente in eliminados['Paciente_ID'].tolist():
                 file.write(f"paciente con id {paciente} eliminado \n")
         for filtro, nombre in zip(filtros_ant, nombres_filtros_ant):
             eliminados = antropometrias[~filtro]
-            file.write(f"Filas antropometrias eliminadas por {nombre}: {eliminados.size}\n")
+            file.write(f"Filas antropometrias eliminadas por {nombre}: {eliminados.shape[0]}\n")
             for ant in eliminados[['Paciente_ID', 'AC_Num']].to_dict('records'):
                 file.write(f"ant {ant['AC_Num']} de paciente {ant['Paciente_ID']} eliminada\n")
 
-    return antropometrias_filtradas, pacientes_filtados
+    return ant_filtradas, pacientes_filtados
+
+def crear_bandera_rciu(pacientes, antropometrias, percentiles):
+    """
+    Crea una bandera para los pacientes que se encuentran por debajo del percentil 10 
+    de fenton en la antropometria de nacimiento ('AC_Num' es 0)
+    """
+    for ant_var, fenton_var in [('Peso', 'peso'), ('Talla', 'talla'), ('PC', 'pc')]:
+        nombre_col = "RCIU_" + ant_var
+        pacientes[nombre_col] = False
+        for sexo, id_sexo in [('ninas', 2), ('ninos', 1)]:
+            var = 'AC_' + ant_var
+            pacientes_sexo = pacientes[pacientes['Iden_Sexo'] == id_sexo]['Paciente_ID']
+            ant = antropometrias[(antropometrias['Paciente_ID'].isin(pacientes_sexo))
+                                & (antropometrias['AC_Num'] == 0)][[var,'AC_EG_Dias','Paciente_ID']]
+            ant_comp_df = ant.join(percentiles['fenton'][sexo][fenton_var]
+                                   .set_index('days')[['10']],
+                                   on='AC_EG_Dias')
+            pacientes_rciu = (ant_comp_df[ant_comp_df[var] < ant_comp_df['10']])['Paciente_ID']
+            pacientes.loc[pacientes['Paciente_ID'].isin(pacientes_rciu), nombre_col] = True
+    return pacientes
+
+def crear_bandera_rceu(pacientes, antropometrias, percentiles):
+    """
+    Crea una bandera para los pacientes que se encuentran por debajo del percentil 10 
+    de fenton en la antropometria de llegada a canguro ('AC_Num' es 1)
+    """
+    for ant_var, fenton_var in [('Peso', 'peso'), ('Talla', 'talla'), ('PC', 'pc')]:
+        nombre_col = "RCEU_" + ant_var
+        pacientes[nombre_col] = False
+        for sexo, id_sexo in [('ninas', 2), ('ninos', 1)]:
+            var = 'AC_' + ant_var
+            pacientes_sexo = pacientes[pacientes['Iden_Sexo'] == id_sexo]['Paciente_ID']
+            ant = antropometrias[(antropometrias['Paciente_ID'].isin(pacientes_sexo))
+                                & (antropometrias['AC_Num'] == 1)][[var,'AC_EG_Dias','Paciente_ID']]
+            ant_comp_df = ant.join(percentiles['fenton'][sexo][fenton_var]
+                                    .set_index('days')[['10']],
+                                    on='AC_EG_Dias')
+            pacientes_rceu = (ant_comp_df[ant_comp_df[var] < ant_comp_df['10']]).index
+            pacientes.loc[pacientes.index.isin(pacientes_rceu), nombre_col] = True
+        return pacientes
 
 def procesar_tablas_visualizacion(dir_tablas_intermedias, dir_datos_crecimiento):
     """
@@ -142,6 +170,8 @@ def procesar_tablas_visualizacion(dir_tablas_intermedias, dir_datos_crecimiento)
     z_scores, percentiles = leer_datos_curvas(dir_datos_crecimiento)
     antropometrias, pacientes = leer_tablas_intermedias(dir_tablas_intermedias)
     antropometrias, pacientes = validar_antropometrias_pacientes(antropometrias, pacientes)
+    pacientes = crear_bandera_rciu(pacientes, antropometrias, percentiles)
+    pacientes = crear_bandera_rceu(pacientes, antropometrias, percentiles)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
