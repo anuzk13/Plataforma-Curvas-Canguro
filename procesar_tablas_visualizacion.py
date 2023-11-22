@@ -110,12 +110,7 @@ def validar_antropometrias_pacientes(antropometrias, pacientes):
     - tiene antropometria 0 u 1 (y no tiene valores nulos en esas antropometrias)
     """
 
-    sexo_valido = pacientes['Iden_Sexo'] != 3
-
-    filtros_pac = [sexo_valido]
-    pacientes_filtados = pacientes[sexo_valido]
-    nombres_filtros_pac = ["Sexo no es 3"]
-
+    # Filtros generales antropometrias
     edad_minima_valida = antropometrias['AC_EG_Dias'] >= 171
     nacimiento_no_nulo = pd.notnull(antropometrias['AC_EG_Dias'])
     peso_no_nulo = pd.notnull(antropometrias['AC_Peso'])
@@ -131,19 +126,23 @@ def validar_antropometrias_pacientes(antropometrias, pacientes):
     nombres_filtros_ant = ['edad < 171' ,
                             'nacimiento nulo', 'peso nulo' , 'pc nulo' , 'talla nula',
                             'peso < 500 gr', 'pc < 15 cm', 'talla < 25 cm']
-    ant_filtradas = antropometrias[reduce(lambda x, y: x & y, filtros_ant)]
 
+    # Filtrar pacientes segun la antropometria de nacimiento
     ant_validas = antropometrias[reduce(lambda x, y: x & y, filtros_ant)]
     ant_nac_pacientes = ant_validas[ant_validas['AC_Num'] == 0]['Paciente_ID']
     ant_nacimiento = pacientes['Paciente_ID'].isin(ant_nac_pacientes)
     primera_ant_pacientes = ant_validas[ant_validas['AC_Num'] == 1]['Paciente_ID']
     primera_ant = pacientes['Paciente_ID'].isin(primera_ant_pacientes)
 
-    filtros_pac += [ant_nacimiento, primera_ant]
-    pacientes_filtados = pacientes[ant_nacimiento & primera_ant]
-    nombres_filtros_pac += ["No tiene antopometria de nacimiento o esta no tiene valores validos",
+    # Filtros pacientes
+    sexo_valido = pacientes['Iden_Sexo'] != 3
+    filtros_pac = [sexo_valido, ant_nacimiento, primera_ant]
+    pacientes_filtados = pacientes[reduce(lambda x, y: x & y, filtros_pac)]
+    nombres_filtros_pac = ["Sexo no es 3",
+                            "No tiene antopometria de nacimiento o esta no tiene valores validos",
                             "No tiene anrtopometria de llegada o esta no tiene valores validos"]
 
+    # Filtrar antropometrias que se quedaron sin paciente
     tiene_paciente = antropometrias['Paciente_ID'].isin(pacientes_filtados['Paciente_ID'])
     filtros_ant += [tiene_paciente]
     nombres_filtros_ant += ['no tiene datos paciente']
