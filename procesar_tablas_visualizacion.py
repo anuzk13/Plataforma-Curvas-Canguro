@@ -279,6 +279,22 @@ def crear_bandera_rceu(pacientes, antropometrias, percentiles):
             pacientes.loc[pacientes.index.isin(pacientes_rceu), nombre_col] = True
         return pacientes
 
+def combinar_rangos_antropometrias(ant_rangos, ant_interpoladas):
+    """
+    Concatenar todos los labels en un df
+    """
+    var_ants = {}
+    for curve_var in ['AC_Peso','AC_Talla','AC_PC']:
+            ants = []
+            for sex in ['ninas','ninos']:
+                for datos_percentiles in ['fenton', 'who']:
+                    ants.append(ant_rangos[curve_var][sex][datos_percentiles])
+            var_ants[curve_var] = pd.concat(ants)
+    data = {"labels_AC_Peso": var_ants['AC_Peso'],
+            "labels_AC_Talla": var_ants['AC_Talla'],
+            "labels_AC_PC": var_ants['AC_PC']}
+    return ant_interpoladas.join(pd.concat(data,axis = 1))
+
 def procesar_tablas_visualizacion(dir_tablas_intermedias, dir_datos_crecimiento):
     """
     Crea las tablas para la visualizacion de los datos
@@ -290,6 +306,7 @@ def procesar_tablas_visualizacion(dir_tablas_intermedias, dir_datos_crecimiento)
     pacientes = crear_bandera_rceu(pacientes, antropometrias, percentiles)
     ant_interpoladas = interpolar_antropometrias(antropometrias)
     ant_rangos = calcular_color_antropometrias(z_scores, pacientes, ant_interpoladas)
+    ant_interpoladas_rangos = combinar_rangos_antropometrias(ant_rangos, ant_interpoladas)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
