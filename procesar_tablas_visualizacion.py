@@ -91,13 +91,13 @@ def interpolar_antropometrias(antropometrias):
         return ant_interpoladas
 
     # Apply the interpolation function to each group
-    df_interpolado = pd.concat(interpolar_antropometrias_paciente(grupo) for _, 
+    df_interpolado = pd.concat(interpolar_antropometrias_paciente(grupo) for _,
                                grupo in ant_promedio_semanas.groupby(level=0))
     df_interpolado = df_interpolado.reset_index()
     df_interpolado['AC_EG_Dias'] = df_interpolado['Semana'] * 7
     df_interpolado = df_interpolado.sort_values(['Paciente_ID', 'AC_EG_Dias'])
     df_interpolado['AC_Num'] = df_interpolado.groupby('Paciente_ID').cumcount()
-    return df_interpolado 
+    return df_interpolado
 
 def validar_antropometrias_pacientes(antropometrias, pacientes):
     """
@@ -211,6 +211,7 @@ def procesar_tablas_visualizacion(dir_tablas_intermedias, dir_datos_crecimiento)
     antropometrias, pacientes = validar_antropometrias_pacientes(antropometrias, pacientes)
     pacientes = crear_bandera_rciu(pacientes, antropometrias, percentiles)
     pacientes = crear_bandera_rceu(pacientes, antropometrias, percentiles)
+    ant_interpoladas = interpolar_antropometrias(antropometrias)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
