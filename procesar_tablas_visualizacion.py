@@ -7,36 +7,8 @@ las antropometrías.
 from functools import reduce
 import argparse
 import pandas as pd
+from constantes import Z_SCORE_COLS, COLORES_RANGOS
 
-z_scores_cols = {
-    'fenton': ['des_3Neg', 'des_2Neg', 'des_1Neg', 'des_0', 'des_1', 'des_2', 'des_3'],
-    'who': ['des_2Neg', 'des_1Neg', 'des_0', 'des_1', 'des_2']
-}
-
-colores_rangos = {
-    'fenton': {
-        'outlier_neg': "#ff7402",
-        'outlier_pos': "#ff7402",
-        'outlier_neg_des_3Neg': "#bf0036",
-        'des_3Neg_des_2Neg': "#8310cc",
-        'des_2Neg_des_1Neg': "#0e7dc2",
-        'des_1Neg_des_0': "#08c754",
-        'des_0_des_1': "#08c754",
-        'des_1_des_2': "#0e7dc2",
-        'des_2_des_3': "#8310cc",
-        'des_3_outlier_pos': "#bf0036"
-    },
-    'who': {
-        'outlier_neg':'#bd8f5d',
-        'outlier_pos':'#bd8f5d',
-        'des_3Neg_des_2Neg':'#bd5d79',
-        'des_2Neg_des_1Neg':'#749eb8',
-        'des_1Neg_des_0':'#73bc90',
-        'des_0_des_1':'#73bc90',
-        'des_1_des_2':'#749eb8',
-        'des_2_des_3':'#bd5d79'
-    }
-}
 
 def calcular_color_ant(fila_ant, col_ant, cols_z_scores, dicc_color):
     """
@@ -72,8 +44,8 @@ def calcular_color_ant_edad(filas_ant, z_scores_df, var_ant, var_z_scores):
     ant = filas_ant[['AC_EG_Dias', var_ant]].join(z_scores_df.set_index('days'), on='AC_EG_Dias')
     colores = ant.apply(lambda fila: calcular_color_ant(fila,
                                                         var_ant,
-                                                        z_scores_cols[var_z_scores],
-                                                        colores_rangos[var_z_scores]), axis=1)
+                                                        Z_SCORE_COLS[var_z_scores],
+                                                        COLORES_RANGOS[var_z_scores]), axis=1)
     return colores
 
 def calcular_color_antropometrias(z_scores, pacientes, antropometrias):
