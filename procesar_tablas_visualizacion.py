@@ -8,6 +8,111 @@ from functools import reduce
 import argparse
 import pandas as pd
 
+z_scores_cols = {
+    'fenton': ['des_3Neg', 'des_2Neg', 'des_1Neg', 'des_0', 'des_1', 'des_2', 'des_3'],
+    'who': ['des_2Neg', 'des_1Neg', 'des_0', 'des_1', 'des_2']
+}
+
+colores_rangos = {
+    'fenton': {
+        'outlier_neg': "#ff7402",
+        'outlier_pos': "#ff7402",
+        'outlier_neg_des_3Neg': "#bf0036",
+        'des_3Neg_des_2Neg': "#8310cc",
+        'des_2Neg_des_1Neg': "#0e7dc2",
+        'des_1Neg_des_0': "#08c754",
+        'des_0_des_1': "#08c754",
+        'des_1_des_2': "#0e7dc2",
+        'des_2_des_3': "#8310cc",
+        'des_3_outlier_pos': "#bf0036"
+    },
+    'who': {
+        'outlier_neg':'#bd8f5d',
+        'outlier_pos':'#bd8f5d',
+        'des_3Neg_des_2Neg':'#bd5d79',
+        'des_2Neg_des_1Neg':'#749eb8',
+        'des_1Neg_des_0':'#73bc90',
+        'des_0_des_1':'#73bc90',
+        'des_1_des_2':'#749eb8',
+        'des_2_des_3':'#bd5d79'
+    }
+}
+
+def calcular_color_ant(fila_ant, col_ant, cols_z_scores, dicc_color):
+    """
+    Calcula el color de una fila de antropometria segun los rangos de distribucion de 
+    antropometrias de fenton o who
+    - fila_ant: fila con antropometria de pacientes y valores de los z_scores
+    para esa antropometria
+    - col_ant: nombre de la columna del valor de la atropometria
+    - cols_z_scores: nombres de las columnas de los valores de z_scores
+    - dicc_color: diccionario con los colores para los rangos de antropometrias
+    """
+    for i, col_z_score in enumerate(cols_z_scores):
+        if fila_ant[col_ant] < fila_ant[col_z_score]:
+            if i == 0:
+                # Si el valor es menor al primer rango es outlier negativo
+                return dicc_color['outlier_neg']
+            llave_color = '_'.join([cols_z_scores[i-1], cols_z_scores[i]])
+            return dicc_color[llave_color]
+    return dicc_color['outlier_pos']  # Si el valor no esta en los rangos en outlier positivo
+
+def calcular_color_ant_edad(filas_ant, z_scores_df, var_ant, var_z_scores):
+    """
+    Calcula el color de un df de z_scores para un grupo de edad con fenton o who
+    - filas_ant: df con las antropometrias que corresponden a las edades de los z_scores
+    - z_scores_df: df con los valores de los z_scores
+    - var_ant: llave de la antropometria a calcular 'AC_Peso', 'AC_Talla',o 'AC_PC'
+    - var_z_scores: llave de los z_scores a usar: 'fenton' o 'who'
+    """
+    # si esta por encima o debajo de 5 de se considera un outlier, esta desviacion es aproximada
+    medida_outlier = (z_scores_df['des_1'] - z_scores_df['des_0']) * 5
+    z_scores_df.insert(0, 'outlier_neg', z_scores_df['des_0'] - medida_outlier)
+    z_scores_df['outlier_pos'] = z_scores_df['des_0'] + medida_outlier
+    ant = filas_ant[['AC_EG_Dias', var_ant]].join(z_scores_df.set_index('days'), on='AC_EG_Dias')
+    colores = ant.apply(lambda fila: calcular_color_ant(fila,
+                                                        var_ant,
+                                                        z_scores_cols[var_z_scores],
+                                                        colores_rangos[var_z_scores]), axis=1)
+    return colores
+
+def calcular_color_antropometrias(z_scores, pacientes, antropometrias):
+    """
+    Calcula el color de un df de z_scores para todas las antropometrias
+    - z_scores: objeto con los valores de z_scores para fenton o who para Talla, Peso y PC
+    - pacientes: df de pacientes con sexo de pacientes
+    - antropometrias: df con antropometria de Peso, Talla, PC, dia y Id de paciente
+    """
+    variables_curvas_ant = {
+        'AC_Peso': 'peso',
+        'AC_Talla': 'talla',
+        'AC_PC': 'pc'
+    }
+
+    # Los percentiles estan en kg
+    antropometrias['AC_Peso'] = antropometrias['AC_Peso']/1000
+
+    ant_rangos = {}
+
+    for curve_var, z_score_var in variables_curvas_ant.items():
+        ant_rangos[curve_var] = {}
+        for sex, sex_id in [('ninas', 2), ('ninos', 1)]:
+            sex_patient_ids = pacientes[pacientes['Iden_Sexo'] == sex_id]['Paciente_ID']
+            sex_filter = antropometrias['Paciente_ID'].isin(sex_patient_ids)
+            ant_rangos[curve_var][sex] = {}
+            for datos_percentiles in ['fenton', 'who']:
+                if datos_percentiles == 'fenton':
+                    age_filter = antropometrias['AC_EG_Dias'] <= 280
+                else:
+                    age_filter = antropometrias['AC_EG_Dias'] > 280
+                filas_ant = (antropometrias[sex_filter & age_filter]
+                                            [[curve_var,'AC_EG_Dias']])
+                z_scores_df = z_scores[datos_percentiles][sex][z_score_var].copy()
+                colores = calcular_color_ant_edad(filas_ant, z_scores_df, curve_var, datos_percentiles)
+                ant_rangos[curve_var][sex][datos_percentiles] = colores
+
+    return ant_rangos
+
 def leer_datos_curvas(dir_datos_crecimiento):
     """
     Lee los datos de creicimiento de fenton y who guardados en dir_datos_creimiento
@@ -212,6 +317,7 @@ def procesar_tablas_visualizacion(dir_tablas_intermedias, dir_datos_crecimiento)
     pacientes = crear_bandera_rciu(pacientes, antropometrias, percentiles)
     pacientes = crear_bandera_rceu(pacientes, antropometrias, percentiles)
     ant_interpoladas = interpolar_antropometrias(antropometrias)
+    ant_rangos = calcular_color_antropometrias(z_scores, pacientes, ant_interpoladas)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
