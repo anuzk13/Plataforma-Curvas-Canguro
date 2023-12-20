@@ -7,7 +7,7 @@ las antropometrías.
 from functools import reduce
 import argparse
 import pandas as pd
-from constantes import Z_SCORE_COLS, COLORES_RANGOS
+from utils import Z_SCORE_COLS, COLORES_RANGOS, leer_datos_curvas
 
 
 def calcular_color_ant(fila_ant, col_ant, cols_z_scores, dicc_color):
@@ -24,10 +24,10 @@ def calcular_color_ant(fila_ant, col_ant, cols_z_scores, dicc_color):
         if fila_ant[col_ant] < fila_ant[col_z_score]:
             if i == 0:
                 # Si el valor es menor al primer rango es outlier negativo
-                return dicc_color['outlier_neg']
+                return dicc_color['outlier_neg'], 'outlier_neg', None
             llave_color = '_'.join([cols_z_scores[i-1], cols_z_scores[i]])
-            return dicc_color[llave_color]
-    return dicc_color['outlier_pos']  # Si el valor no esta en los rangos en outlier positivo
+            return dicc_color[llave_color], cols_z_scores[i-1], cols_z_scores[i]
+    return dicc_color['outlier_pos'], None, 'outlier_pos'  # Si el valor no esta en los rangos en outlier positivo
 
 def calcular_color_ant_edad(filas_ant, z_scores_df, var_ant, var_z_scores):
     """
@@ -84,45 +84,6 @@ def calcular_color_antropometrias(z_scores, pacientes, antropometrias):
                 ant_rangos[curve_var][sex][datos_percentiles] = colores
 
     return ant_rangos
-
-def leer_datos_curvas(dir_datos_crecimiento):
-    """
-    Lee los datos de creicimiento de fenton y who guardados en dir_datos_creimiento
-    Los archivos deben tener la siguiente esctructura
-    curvas_(desviaciones/percentiles)_(who/fenton)/
-        (z_scores/percentiles)_(pc/talla/peso)_(ninos/ninas)_(who/fenton).csv
-    """
-
-    folder = dir_datos_crecimiento + "/curvas"
-
-    growth_vars = [ "pc","talla","peso"]
-
-    z_scores = {
-        "fenton" : {
-            "ninos": {},
-            "ninas":{}
-        },
-        "who" : {
-            "ninos": {},
-            "ninas":{}
-        }
-    }
-
-    percentiles = {
-        "fenton" : {
-            "ninos": {},
-            "ninas":{}
-        }
-    }
-
-    for var in growth_vars:
-        for sex in ["ninos", "ninas"]:
-            for curve in ["fenton", "who"]:
-                name = f"{folder}_desviaciones_{curve}/z_scores_{var}_{sex}_{curve}.csv"
-                z_scores[curve][sex][var] = pd.read_csv(name, index_col=0)
-                name = f"{folder}_percentiles_fenton/percentiles_{var}_{sex}_fenton.csv"
-                percentiles["fenton"][sex][var] = pd.read_csv(name, index_col=0)
-    return z_scores, percentiles
 
 def leer_tablas_intermedias(dir_tablas_intermedias):
     """
@@ -285,15 +246,19 @@ def combinar_rangos_antropometrias(ant_rangos, ant_interpoladas):
     """
     var_ants = {}
     for curve_var in ['AC_Peso','AC_Talla','AC_PC']:
-            ants = []
-            for sex in ['ninas','ninos']:
-                for datos_percentiles in ['fenton', 'who']:
-                    ants.append(ant_rangos[curve_var][sex][datos_percentiles])
-            var_ants[curve_var] = pd.concat(ants)
-    data = {"labels_AC_Peso": var_ants['AC_Peso'],
-            "labels_AC_Talla": var_ants['AC_Talla'],
-            "labels_AC_PC": var_ants['AC_PC']}
-    return ant_interpoladas.join(pd.concat(data,axis = 1))
+        ants = []
+        for sex in ['ninas','ninos']:
+            for datos_percentiles in ['fenton', 'who']:
+                # Extrayendo resultados como DataFrame
+                resultados = ant_rangos[curve_var][sex][datos_percentiles]
+                # Separando los resultados en columnas individuales
+                df_resultados = pd.DataFrame(resultados.tolist(), columns=[f"{curve_var}_color", f"{curve_var}_min", f"{curve_var}_max"], index=resultados.index)
+                ants.append(df_resultados)
+        var_ants[curve_var] = pd.concat(ants)
+
+    # Concatenar todas las columnas de resultados
+    data = pd.concat([var_ants[curve_var] for curve_var in ['AC_Peso', 'AC_Talla', 'AC_PC']], axis=1)
+    return ant_interpoladas.join(data)
 
 def procesar_tablas_visualizacion(dir_tablas_intermedias, dir_datos_crecimiento):
     """
@@ -307,6 +272,7 @@ def procesar_tablas_visualizacion(dir_tablas_intermedias, dir_datos_crecimiento)
     ant_interpoladas = interpolar_antropometrias(antropometrias)
     ant_rangos = calcular_color_antropometrias(z_scores, pacientes, ant_interpoladas)
     ant_interpoladas_rangos = combinar_rangos_antropometrias(ant_rangos, ant_interpoladas)
+    ant_interpoladas_rangos.to_pickle("ant_interpoladas_rangos.pkl")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
