@@ -24,10 +24,10 @@ def calcular_color_ant(fila_ant, col_ant, cols_z_scores, dicc_color):
         if fila_ant[col_ant] < fila_ant[col_z_score]:
             if i == 0:
                 # Si el valor es menor al primer rango es outlier negativo
-                return dicc_color['outlier_neg'], 'outlier_neg', None
+                return dicc_color['outlier_neg'], None, 'outlier_neg'
             llave_color = '_'.join([cols_z_scores[i-1], cols_z_scores[i]])
             return dicc_color[llave_color], cols_z_scores[i-1], cols_z_scores[i]
-    return dicc_color['outlier_pos'], None, 'outlier_pos'  # Si el valor no esta en los rangos en outlier positivo
+    return dicc_color['outlier_pos'], 'outlier_pos', None  # Si el valor no esta en los rangos en outlier positivo
 
 def calcular_color_ant_edad(filas_ant, z_scores_df, var_ant, var_z_scores):
     """
