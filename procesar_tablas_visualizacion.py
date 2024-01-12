@@ -13,7 +13,8 @@ from utils import Z_SCORE_COLS, COLORES_RANGOS, leer_datos_curvas
 def calcular_color_ant(fila_ant, col_ant, cols_z_scores, dicc_color):
     """
     Calcula el color de una fila de antropometria segun los rangos de distribucion de 
-    antropometrias de fenton o who
+    antropometrias de fenton o who, retorna dos valores:
+        - el color segun el rango, el percentil inmediatamente menor al valor 
     - fila_ant: fila con antropometria de pacientes y valores de los z_scores
     para esa antropometria
     - col_ant: nombre de la columna del valor de la atropometria
@@ -24,10 +25,10 @@ def calcular_color_ant(fila_ant, col_ant, cols_z_scores, dicc_color):
         if fila_ant[col_ant] < fila_ant[col_z_score]:
             if i == 0:
                 # Si el valor es menor al primer rango es outlier negativo
-                return dicc_color['outlier_neg'], None, 'outlier_neg'
+                return dicc_color['outlier_neg'], None
             llave_color = '_'.join([cols_z_scores[i-1], cols_z_scores[i]])
-            return dicc_color[llave_color], cols_z_scores[i-1], cols_z_scores[i]
-    return dicc_color['outlier_pos'], 'outlier_pos', None  # Si el valor no esta en los rangos en outlier positivo
+            return dicc_color[llave_color], cols_z_scores[i-1]
+    return dicc_color['outlier_pos'], 'outlier_pos'  # Si el valor no esta en los rangos en outlier positivo
 
 def calcular_color_ant_edad(filas_ant, z_scores_df, var_ant, var_z_scores):
     """
@@ -252,7 +253,7 @@ def combinar_rangos_antropometrias(ant_rangos, ant_interpoladas):
                 # Extrayendo resultados como DataFrame
                 resultados = ant_rangos[curve_var][sex][datos_percentiles]
                 # Separando los resultados en columnas individuales
-                df_resultados = pd.DataFrame(resultados.tolist(), columns=[f"{curve_var}_color", f"{curve_var}_min", f"{curve_var}_max"], index=resultados.index)
+                df_resultados = pd.DataFrame(resultados.tolist(), columns=[f"{curve_var}_color", f"{curve_var}_min"], index=resultados.index)
                 ants.append(df_resultados)
         var_ants[curve_var] = pd.concat(ants)
 
@@ -273,6 +274,7 @@ def procesar_tablas_visualizacion(dir_tablas_intermedias, dir_datos_crecimiento)
     ant_rangos = calcular_color_antropometrias(z_scores, pacientes, ant_interpoladas)
     ant_interpoladas_rangos = combinar_rangos_antropometrias(ant_rangos, ant_interpoladas)
     ant_interpoladas_rangos.to_pickle("ant_interpoladas_rangos.pkl")
+    pacientes.to_pickle("pacientes_banderas.pkl")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
