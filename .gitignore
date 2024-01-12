@@ -6,3 +6,13 @@
 *.pkl
 
 *.txt
+
+__pycache__/
+
+DatosCrecimiento/
+
+.ipynb_checkpoints/
+
+*.css
+
+*.ipynb
