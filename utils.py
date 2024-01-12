@@ -4,6 +4,7 @@ Este módulo contiene constantes usadas en los diferentes programas
 
 import pandas as pd
 
+# El orden relativo de estos labels es importante para funciones como filtrado segun desviacion estandar de variable al nacer
 Z_SCORE_COLS = {
     'fenton': ['des_3Neg', 'des_2Neg', 'des_1Neg', 'des_0', 'des_1', 'des_2', 'des_3'],
     'who': ['des_2Neg', 'des_1Neg', 'des_0', 'des_1', 'des_2']
